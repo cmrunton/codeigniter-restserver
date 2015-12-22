@@ -2204,4 +2204,61 @@ abstract class REST_Controller extends CI_Controller {
         }
     }
 
+    /**
+     * Check to see if presented user_id and API key match
+     *
+     * @access protected
+     * @return boolean
+     */
+    protected function check_api_key() {
+      $this->load->database();
+
+      $user_id = filter_var(trim($_SERVER['HTTP_X_USER_ID']), FILTER_VALIDATE_INT);
+      $api_key = $_SERVER['HTTP_X_API_KEY'];
+
+      $sql = "SELECT api_key FROM customer_authorization WHERE customer_id = ?";
+      $query = $this->db->query($sql,[$user_id]);
+
+      if (!$query) {
+        $parent_method = 'REST_Controller/check_api_key';
+        $db_error = $this->db->error();
+        $last_query = $this->db->last_query();
+
+        $this->load->model('v1/Logging_model');
+        $this->Logging_model->database_logger(400, $parent_method, $db_error, $last_query, $user_id);
+        $result = [
+          'status' => 'error',
+          'message' => $db_error
+        ];
+        return false;
+
+      } elseif ($query->num_rows() === 0) {
+        $parent_method = 'REST_Controller/check_api_key';
+        $message = 'User authentication failed - user_id not found';
+
+        $this->load->model('v1/Logging_model');
+        $this->Logging_model->authentication_event(300, $parent_method, $message, $user_id);
+
+        return false;
+
+      }
+
+      $stored_api_key = $query->row(0)->api_key;
+
+      if ($stored_api_key !== $api_key) {
+        $parent_method = 'REST_Controller/check_api_key';
+        $message = 'User authentication failed - invalid API key provided';
+
+        $this->load->model('v1/Logging_model');
+        $this->Logging_model->authentication_event(300, $parent_method, $message, $user_id);
+
+        return false;
+
+      } else {
+        return true;
+
+      }
+
+    }
+
 }
